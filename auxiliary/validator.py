@@ -3,5 +3,3 @@ This script contains functions for cross validation, splitting data into train-t
 """
 import numpy as np
 import pandas as pd
-
-

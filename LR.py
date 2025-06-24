@@ -46,7 +46,7 @@ X = df.drop(["key_index", "misc_price", "rom", "selfie_camera_video"], axis=1)
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, random_state=120, test_size=.3)
 
-""" 
+"""
 Baseline performance of sklearn algorithms.
 """
 
@@ -63,7 +63,8 @@ print("MSE: ", mean_squared_error(y_test, y_pred))
 print("\n")
 
 # Test categorical data only
-X = X.drop(["body_dimensions", "screen_size", "scn_bdy_ratio", "clock_speed", "battery"], axis=1)
+X = X.drop(["body_dimensions", "screen_size",
+           "scn_bdy_ratio", "clock_speed", "battery"], axis=1)
 
 # Categorical input/ouput
 X_trainC, X_testC, y_trainC, y_testC = train_test_split(
@@ -84,135 +85,139 @@ Now we investigate LR in more depth by learning our own models and regularizing.
 # Set up class & method defs for LR batch
 
 class LinReg:
+  """
+  A streamlined linear regression object for batch learning.
+  """
+
+  def __init__(self, epochs=1000, n_features=20):
+    self.theta_pred = 0
+    self.epochs = epochs
+    self.n_features = n_features
+    self.t0 = 5
+    self.t1 = 50
+    self.weights = []
+
+  def learn_rate(self, t):
+    return self.t0 / (t + self.t1)
+
+  def fit_batch(self, X, y):
     """
-    A streamlined linear regression object for batch learning.
+    Use the normal eq. to find the weights. Note high computational complexity so not optimal
+    for use on complete dataset.
     """
+    self.theta_pred = \
+        np.linalg.inv(X.T.dot(X)).dot(X.T).dot(y)
 
-    def __init__(self, epochs=1000, n_features=20):
-        self.theta_pred = 0
-        self.epochs = epochs
-        self.n_features = n_features
-        self.t0 = 5
-        self.t1 = 50
-        self.weights = []
+  def fit_stochastic(self, X, y):
+    """
+    Stochastic gradient descent.
+    NOTE1. a bit of 'boiler-plate' code in gradient descent, should probably specify a 'gradient_desc' method
+    and have 'L1' & 'L2' options instead.
+    """
+    # initialize random weights according to gaussian distr.
+    self.weights = np.random.randn(self.n_features, 1)
+    prev_weights = self.weights
+    n = X.shape[0]
 
-    def learn_rate(self, t):
-        return self.t0 / (t + self.t1)
+    # Ref: 'Hands on Machine Learning ..' Gueron. (p 127) for general stochastic grad. descent algorithm.
+    for epoch in range(self.epochs):
+      for i in range(n):
+        rand_index = np.random.randint(n)
+        x_i = X[rand_index:rand_index + 1]
+        y_i = y[rand_index:rand_index + 1]
+        grad = 2 * x_i.T.dot(x_i.dot(self.weights) - y_i)
+        self.weights += -self.learn_rate(epoch * n + i) * grad
 
-    def fit_batch(self, X, y):
-        """
-        Use the normal eq. to find the weights. Note high computational complexity so not optimal
-        for use on complete dataset.
-        """
-        self.theta_pred = \
-            np.linalg.inv(X.T.dot(X)).dot(X.T).dot(y)
+        # conditional end
+        if epoch > 1 and np.linalg.norm(np.abs(self.weights - prev_weights)) < 10:
+          return
 
-    def fit_stochastic(self, X, y):
-        """
-        Stochastic gradient descent.
-        NOTE1. a bit of 'boiler-plate' code in gradient descent, should probably specify a 'gradient_desc' method
-        and have 'L1' & 'L2' options instead.
-        """
-        # initialize random weights according to gaussian distr.
-        self.weights = np.random.randn(self.n_features, 1)
         prev_weights = self.weights
-        n = X.shape[0]
 
-        # Ref: 'Hands on Machine Learning ..' Gueron. (p 127) for general stochastic grad. descent algorithm.
-        for epoch in range(self.epochs):
-            for i in range(n):
-                rand_index = np.random.randint(n)
-                x_i = X[rand_index:rand_index + 1]
-                y_i = y[rand_index:rand_index + 1]
-                grad = 2 * x_i.T.dot(x_i.dot(self.weights) - y_i)
-                self.weights += -self.learn_rate(epoch * n + i) * grad
+  def L1_fit(self, X, y, lmb=1, cond_end=10):
+    """
+    Fit according to Lasso regression. NOTE: uses self.weights.
+    """
+    # new objective function -> argmin(y-Xw)^T(y-Xw) + lmb*L1Norm(w)
+    self.weights = np.random.randn(self.n_features, 1)
+    prev_weights = self.weights
+    n = X.shape[0]
 
-                # conditional end
-                if epoch > 1 and np.linalg.norm(np.abs(self.weights - prev_weights)) < 10:
-                    return
+    for epoch in range(self.epochs):
+      for i in range(n):
+        rand_index = np.random.randint(n)
+        x_i = X[rand_index:rand_index + 1]
+        y_i = y[rand_index:rand_index + 1]
+        grad = 2 * x_i.T.dot(x_i.dot(self.theta_pred) - y_i)
+        penalty = lmb * np.linalg.norm(self.theta_pred, ord=1)
+        self.weights += - \
+            self.learn_rate(epoch * n + i) * grad + \
+            [self.weights.shape[0]*[penalty]]
 
-                prev_weights = self.weights
+        # conditional end
+        if epoch > 1 and np.linalg.norm(np.abs(self.weights - prev_weights)) < cond_end:
+          return
 
-    def L1_fit(self, X, y, lmb=1, cond_end=10):
-        """
-        Fit according to Lasso regression. NOTE: uses self.weights.
-        """
-        # new objective function -> argmin(y-Xw)^T(y-Xw) + lmb*L1Norm(w)
-        self.weights = np.random.randn(self.n_features, 1)
         prev_weights = self.weights
-        n = X.shape[0]
 
-        for epoch in range(self.epochs):
-            for i in range(n):
-                rand_index = np.random.randint(n)
-                x_i = X[rand_index:rand_index + 1]
-                y_i = y[rand_index:rand_index + 1]
-                grad = 2 * x_i.T.dot(x_i.dot(self.theta_pred) - y_i)
-                penalty = lmb * np.linalg.norm(self.theta_pred, ord=1)
-                self.weights += -self.learn_rate(epoch * n + i) * grad + [self.weights.shape[0]*[penalty]]
+  def L2_fit(self, X, y, lmb=1, closed_form=True, cond_end=10):
+    """
+    Fit according to Ridge regression.
+    """
+    if closed_form:
+      S1 = np.linalg.inv(X.T.dot(X) + lmb * np.identity())
+      S2 = X.T.dot(y)
+      self.theta_pred = S1.dot(S2)
+    else:
+      # objective function -> argmin(y-Xw)^T(y-Xw) + lmb*L2Norm(w)**2. ref slides (1).
+      self.weights = np.random.randn(self.n_features, 1)
+      prev_weights = self.weights
+      n = X.shape[0]
 
-                # conditional end
-                if epoch > 1 and np.linalg.norm(np.abs(self.weights - prev_weights)) < cond_end:
-                    return
+      for epoch in range(self.epochs):
+        for i in range(n):
+          rand_index = np.random.randint(n)
+          x_i = X[rand_index:rand_index + 1]
+          y_i = y[rand_index:rand_index + 1]
+          grad = 2 * x_i.T.dot(x_i.dot(self.weights) - y_i)
+          penalty = lmb * (np.linalg.norm(self.weights, ord=2) ** 2)
+          self.weights += - \
+              self.learn_rate(epoch * n + i) * grad + \
+              [self.weights.shape[0]*[penalty]]
 
-                prev_weights = self.weights
+          # conditional end if |w*(i+1) - w*(i)| changes less than an arbitary value, say 10.
+          if epoch > 1 and np.linalg.norm(np.abs(self.weights - prev_weights)) < cond_end:
+            return
 
-    def L2_fit(self, X, y, lmb=1, closed_form=True, cond_end=10):
-        """
-        Fit according to Ridge regression.
-        """
-        if closed_form:
-            S1 = np.linalg.inv(X.T.dot(X) + lmb * np.identity())
-            S2 = X.T.dot(y)
-            self.theta_pred = S1.dot(S2)
-        else:
-            # objective function -> argmin(y-Xw)^T(y-Xw) + lmb*L2Norm(w)**2. ref slides (1).
-            self.weights = np.random.randn(self.n_features, 1)
-            prev_weights = self.weights
-            n = X.shape[0]
+          prev_weights = self.weights
 
-            for epoch in range(self.epochs):
-                for i in range(n):
-                    rand_index = np.random.randint(n)
-                    x_i = X[rand_index:rand_index + 1]
-                    y_i = y[rand_index:rand_index + 1]
-                    grad = 2 * x_i.T.dot(x_i.dot(self.weights) - y_i)
-                    penalty = lmb * (np.linalg.norm(self.weights, ord=2) ** 2)
-                    self.weights += -self.learn_rate(epoch * n + i) * grad + [self.weights.shape[0]*[penalty]]
+  def predict_batch(self, X):
+    """
+    For batch fit & closed form L2.
+    """
+    return X.dot(self.theta_pred)
 
-                    # conditional end if |w*(i+1) - w*(i)| changes less than an arbitary value, say 10.
-                    if epoch > 1 and np.linalg.norm(np.abs(self.weights - prev_weights)) < cond_end:
-                        return
+  def predict_stochastic(self, X):
+    """
+    For gradient descent, stochastic, L1, L2.
+    """
+    return X.dot(self.weights)
 
-                    prev_weights = self.weights
+  def performance(self, y_test, y_pred, batch=True):
+    print('Coefficients: \n', self.theta_pred if batch else self.weights)
 
-    def predict_batch(self, X):
-        """
-        For batch fit & closed form L2.
-        """
-        return X.dot(self.theta_pred)
+    print('Mean squared error: %.2f'
+          % mean_squared_error(y_test, y_pred))
 
-    def predict_stochastic(self, X):
-        """
-        For gradient descent, stochastic, L1, L2.
-        """
-        return X.dot(self.weights)
+    print('Coefficient of determination: %.2f'
+          % r2_score(y_test, y_pred))
 
-    def performance(self, y_test, y_pred, batch=True):
-        print('Coefficients: \n', self.theta_pred if batch else self.weights)
+  def plot(self, X, y, batch=True):
+    plt.figure()
+    plt.plot(X, y)
 
-        print('Mean squared error: %.2f'
-              % mean_squared_error(y_test, y_pred))
-
-        print('Coefficient of determination: %.2f'
-              % r2_score(y_test, y_pred))
-
-    def plot(self, X, y, batch=True):
-        plt.figure()
-        plt.plot(X, y)
-
-        plt.figure()
-        plt.plot(self.theta_pred if batch else self.weights)
+    plt.figure()
+    plt.plot(self.theta_pred if batch else self.weights)
 
 
 # Train LinReg Batch
