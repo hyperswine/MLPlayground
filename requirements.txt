@@ -1,0 +1,6 @@
+NumPy==1.19.0
+Pandas==1.1.0
+Matplotlib==3.3.0
+Seaborn==0.10.1
+Scikit-Learn==0.23.0
+GraphViz
